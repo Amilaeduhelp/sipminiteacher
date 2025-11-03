@@ -722,7 +722,6 @@
         const SUPABASE_URL = 'https://uqgzlaxsnknheoerbfus.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVxZ3psYXhzbmtuaGVvZXJiZnVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ4MDQzMTEsImV4cCI6MjA2MDM4MDMxMX0.O5dNUizqZ5kfwTs0mHLEorqOAqjZFjWakp2Q484MKEk';
         
-        // Access code to teacher name mapping
         const TEACHER_MAPPING = {
             'jaya': 'මහාචාර්ය චරිත් ජයතිලක',
             'gee': 'ධම්මික ගීකියනගේ',
@@ -735,11 +734,11 @@
             'hal': 'දිනේෂ් හල්ඕවිට'
         };
         
-        let currentTeacherName = ''; // Database teacher name
-        let currentAccessCode = ''; // Login access code
+        let currentTeacherName = '';
+        let currentAccessCode = '';
         let reportData = [];
-        let allStudentsData = []; // Store all students
-        let showAllStudents = false; // Toggle for showing all students
+        let allStudentsData = [];
+        let showAllStudents = false;
         let barChartInstance = null;
         let pieChartInstance = null;
 
@@ -751,14 +750,12 @@
 
         document.getElementById('monthSelect').value = String(new Date().getMonth() + 1).padStart(2, '0');
 
-        // SHA-256 hash function
         async function hashPassword(password) {
             const encoder = new TextEncoder();
             const data = encoder.encode(password);
             const hashBuffer = await crypto.subtle.digest('SHA-256', data);
             const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            return hashHex;
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -773,7 +770,6 @@
             errorDiv.classList.add('hidden');
 
             try {
-                // Fetch credentials with case-insensitive matching
                 const response = await fetch(
                     `${SUPABASE_URL}/rest/v1/credentials?access_code=ilike.${accessCode}&select=*`,
                     {
@@ -789,16 +785,13 @@
                 if (data && data.length > 0) {
                     const credential = data[0];
                     
-                    // Check if account is active
                     if (!credential.is_active) {
                         showError('මෙම ගිණුම අක්‍රිය කර ඇත. කරුණාකර පරිපාලකයා සම්බන්ධ කර ගන්න.');
                         return;
                     }
 
-                    // Verify password with SHA-256
                     const inputHash = await hashPassword(password);
                     if (credential.password_hash === inputHash) {
-                        // Update last login timestamp (optional - skip if causing errors)
                         try {
                             await fetch(
                                 `${SUPABASE_URL}/rest/v1/credentials?id=eq.${credential.id}`,
@@ -819,7 +812,6 @@
                             console.log('Last login update skipped');
                         }
 
-                        // Get teacher name from mapping
                         currentAccessCode = accessCode;
                         currentTeacherName = TEACHER_MAPPING[accessCode];
                         
@@ -857,18 +849,11 @@
             currentTeacherName = '';
             currentAccessCode = '';
             reportData = [];
+            allStudentsData = [];
             document.getElementById('dashboard').classList.add('hidden');
             document.getElementById('loginScreen').classList.remove('hidden');
             document.getElementById('accessCode').value = '';
             document.getElementById('password').value = '';
-        }
-
-        function calculateOutstanding(unpaidDays) {
-            if (unpaidDays >= 2 && unpaidDays <= 4) return 1;
-            if (unpaidDays >= 6 && unpaidDays <= 9) return 2;
-            if (unpaidDays >= 10 && unpaidDays <= 13) return 3;
-            if (unpaidDays >= 14) return Math.ceil(unpaidDays / 7 / 2);
-            return 0;
         }
 
         async function fetchReportData() {
@@ -881,7 +866,6 @@
             noDataMessage.classList.add('hidden');
 
             try {
-                // Fetch ALL records from sipminireport table
                 const response = await fetch(
                     `${SUPABASE_URL}/rest/v1/sipminireport?select=*`,
                     {
@@ -893,27 +877,20 @@
                 );
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('API Error:', response.status, errorText);
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
                 const allData = await response.json();
-                
-                // Filter records where teachername column contains current teacher's name
                 const teacherRecords = [];
                 
                 if (allData && Array.isArray(allData)) {
                     allData.forEach(record => {
-                        // Check if teachername field contains the current teacher's name
                         if (record.teachername && record.teachername.includes(currentTeacherName)) {
                             teacherRecords.push(record);
                         }
                     });
                 }
 
-                console.log('Found records for', currentTeacherName, ':', teacherRecords.length);
-                
                 const selectedMonth = document.getElementById('monthSelect').value;
                 const currentYear = new Date().getFullYear();
 
@@ -922,13 +899,11 @@
                     return;
                 }
 
-                // Parse payment data
                 reportData = teacherRecords.map(student => {
                     const paymentData = student.payment || '';
                     const monthlyFee = parseFloat(student.monthly_fee) || 0;
                     const teacherShare = parseFloat(student.treport) || 0;
                     
-                    // Parse payment entries (format: 3/Nov/2025-2500)
                     const payments = [];
                     if (paymentData) {
                         const entries = paymentData.split(',').map(e => e.trim());
@@ -940,23 +915,15 @@
                                     day: parseInt(day),
                                     month: month,
                                     year: parseInt(year),
-                                    amount: parseFloat(amount),
-                                    date: `${day}/${month}/${year}`
+                                    amount: parseFloat(amount)
                                 });
                             }
                         });
                     }
 
-                    // Convert selected month number to name
                     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                     const selectedMonthName = monthNames[parseInt(selectedMonth) - 1];
 
-                    // Filter payments for selected month
-                    const monthPayments = payments.filter(p => 
-                        p.month === selectedMonthName && p.year === currentYear
-                    );
-
-                    // Parse attendance from sreport (assuming similar format)
                     const attendanceData = student.sreport || '';
                     const attendances = [];
                     if (attendanceData) {
@@ -968,30 +935,50 @@
                                 attendances.push({
                                     day: parseInt(day),
                                     month: month,
-                                    year: parseInt(year),
-                                    date: `${day}/${month}/${year}`
+                                    year: parseInt(year)
                                 });
                             }
                         });
                     }
 
-                    // Filter attendance for selected month
+                    let totalUnpaidMonths = 0;
+                    
+                    const attendanceByMonth = {};
+                    attendances.forEach(att => {
+                        const key = `${att.month}-${att.year}`;
+                        if (!attendanceByMonth[key]) {
+                            attendanceByMonth[key] = [];
+                        }
+                        attendanceByMonth[key].push(att);
+                    });
+
+                    Object.keys(attendanceByMonth).forEach(monthKey => {
+                        const [month, year] = monthKey.split('-');
+                        const monthAttendances = attendanceByMonth[monthKey];
+                        
+                        const hasPaymentForMonth = payments.some(p => 
+                            p.month === month && p.year === parseInt(year)
+                        );
+
+                        if (!hasPaymentForMonth && monthAttendances.length > 0) {
+                            totalUnpaidMonths++;
+                        }
+                    });
+
                     const monthAttendance = attendances.filter(a => 
                         a.month === selectedMonthName && a.year === currentYear
                     );
 
-                    // Calculate unpaid days
-                    const unpaidDays = monthAttendance.filter(att => {
-                        // Check if there's a payment on or before this attendance date
-                        return !monthPayments.some(pay => {
-                            const payDay = pay.day;
-                            const attDay = att.day;
-                            return payDay <= attDay;
-                        });
-                    }).length;
+                    const monthPayments = payments.filter(p => 
+                        p.month === selectedMonthName && p.year === currentYear
+                    );
 
-                    const monthsOutstanding = calculateOutstanding(unpaidDays);
-                    const outstandingAmount = monthsOutstanding * monthlyFee;
+                    let currentMonthUnpaidDays = 0;
+                    if (monthAttendance.length > 0 && monthPayments.length === 0) {
+                        currentMonthUnpaidDays = monthAttendance.length;
+                    }
+
+                    const outstandingAmount = totalUnpaidMonths * monthlyFee;
                     const paidAmount = monthPayments.reduce((sum, p) => sum + p.amount, 0);
 
                     return {
@@ -1000,22 +987,23 @@
                         treport: teacherShare,
                         paidAmount,
                         outstandingAmount,
-                        unpaidDays,
-                        monthsOutstanding,
+                        unpaidDays: currentMonthUnpaidDays,
+                        monthsOutstanding: totalUnpaidMonths,
                         totalAttendance: monthAttendance.length,
-                        paymentStatus: outstandingAmount === 0 ? 'ගෙවා අවසන්' : monthsOutstanding > 2 ? 'අනතුරු ඇඟවීම' : 'හිඟ මුදල්'
+                        paymentStatus: outstandingAmount === 0 ? 'ගෙවා අවසන්' : totalUnpaidMonths >= 3 ? 'අනතුරු ඇඟවීම' : 'හිඟ මුදල්'
                     };
                 });
 
-                // Store all students data
                 allStudentsData = reportData;
-                
-                // By default, show only students with outstanding
                 reportData = allStudentsData.filter(s => s.outstandingAmount > 0);
                 showAllStudents = false;
                 updateToggleButton();
 
-                renderReport();
+                if (allStudentsData.length > 0) {
+                    renderReport();
+                } else {
+                    showNoData();
+                }
             } catch (error) {
                 console.error('Error fetching data:', error);
                 showNoData();
@@ -1154,7 +1142,6 @@
         }
 
         function getSummary() {
-            // Use allStudentsData for accurate totals
             const allStudents = allStudentsData.length > 0 ? allStudentsData : reportData;
             
             const totalExpected = allStudents.reduce((sum, s) => sum + s.monthly_fee, 0);
@@ -1169,8 +1156,7 @@
                 totalOutstanding,
                 totalIncome,
                 totalStudents: allStudents.length,
-                studentsWithOutstanding,
-                displayedStudents: reportData.length
+                studentsWithOutstanding
             };
         }
 
@@ -1320,18 +1306,8 @@
                     });
             }
 
-            text += `📋 *සම්පූර්ණ සිසු ලැයිස්තුව:*\n\n`;
-            reportData.forEach((s, i) => {
-                text += `${i + 1}. ${s.studentname} - `;
-                text += `ගෙවූ: රු ${s.paidAmount.toLocaleString()}`;
-                if (s.outstandingAmount > 0) {
-                    text += ` | හිඟ: රු ${s.outstandingAmount.toLocaleString()}`;
-                }
-                text += `\n`;
-            });
-
             navigator.clipboard.writeText(text).then(() => {
-                alert('✅ වාර්තාව පිටපත් කරන ලදී! ඔබට දැන් WhatsApp වෙත paste කළ හැක.');
+                alert('✅ වාර්තාව පිටපත් කරන ලදී!');
             });
         }
 
