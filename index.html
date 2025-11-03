@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ගුරු වාර්තා පද්ධතිය</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f9fafb; color: #1f2937; }
@@ -50,6 +50,8 @@
         .btn-orange:hover { background: #ea580c; }
         .loading-container { text-align: center; padding: 3rem 0; }
         .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #9333ea; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto; }
+        .spinner-small { width: 20px; height: 20px; border-width: 2px; }
+        .flex-center { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .loading-text { color: #6b7280; margin-top: 1rem; }
         .grid { display: grid; gap: 1.5rem; margin-bottom: 1.5rem; }
@@ -94,6 +96,7 @@
         .no-data-icon { color: #9ca3af; margin: 0 auto 1rem; }
         .no-data-title { font-size: 1.5rem; font-weight: bold; color: #1f2937; margin-bottom: 0.5rem; }
         .no-data-text { color: #6b7280; }
+        .print-footer-small { font-size: 0.75rem; margin-top: 0.5rem; }
         @media print { .no-print { display: none !important; } body { background: white; } .print-show { display: block !important; } .container { padding: 0; } }
         .print-show { display: none; }
         .print-header { text-align: center; margin-bottom: 2rem; }
@@ -233,7 +236,7 @@
             </div>
             <div class="print-footer print-show">
                 <p id="printFooter"></p>
-                <p style="font-size: 0.75rem; margin-top: 0.5rem;">SIPMINI EDUCATIONAL INSTITUTE</p>
+                <p class="print-footer-small">🔒 Supabase ආරක්ෂිත දත්ත පද්ධතිය</p>
             </div>
         </div>
 
@@ -266,35 +269,187 @@
 
         async function hashPassword(password){const encoder=new TextEncoder();const data=encoder.encode(password);const hashBuffer=await crypto.subtle.digest('SHA-256',data);const hashArray=Array.from(new Uint8Array(hashBuffer));return hashArray.map(b=>b.toString(16).padStart(2,'0')).join('');}
 
-        document.getElementById('loginForm').addEventListener('submit',async(e)=>{e.preventDefault();const accessCode=document.getElementById('accessCode').value.toLowerCase().trim();const password=document.getElementById('password').value;const loginBtn=document.getElementById('loginBtn');const errorDiv=document.getElementById('loginError');loginBtn.disabled=true;loginBtn.innerHTML='<div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><div class="spinner" style="width: 20px; height: 20px; border-width: 2px;"></div>පිවිසෙමින්...</div>';errorDiv.classList.add('hidden');try{const response=await fetch(`${SUPABASE_URL}/rest/v1/credentials?access_code=ilike.${accessCode}&select=*`,{headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}});const data=await response.json();if(data&&data.length>0){const credential=data[0];if(!credential.is_active){showError('මෙම ගිණුම අක්‍රිය කර ඇත. කරුණාකර පරිපාලකයා සම්බන්ධ කර ගන්න.');return;}const inputHash=await hashPassword(password);if(credential.password_hash===inputHash){try{await fetch(`${SUPABASE_URL}/rest/v1/credentials?id=eq.${credential.id}`,{method:'PATCH',headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({last_login:new Date().toISOString()})});}catch(e){console.log('Last login update skipped');}currentAccessCode=accessCode;currentTeacherName=TEACHER_MAPPING[accessCode];if(!currentTeacherName){showError('මෙම access code එක සඳහා ගුරු නමක් සකසා නොමැත.');return;}document.getElementById('welcomeText').textContent=`ආයුබෝවන්, ${currentTeacherName}`;document.getElementById('loginScreen').classList.add('hidden');document.getElementById('dashboard').classList.remove('hidden');fetchReportData();}else{showError('වැරදි මුරපදයකි');}}else{showError('වැරදි ප්‍රවේශ කේතයකි');}}catch(error){console.error('Login error:',error);showError('පිවිසීමේ දෝෂයක් ඇතිවිය. නැවත උත්සාහ කරන්න.');}finally{loginBtn.disabled=false;loginBtn.textContent='පිවිසෙන්න';}});
+        document.getElementById('loginForm').addEventListener('submit',async(e)=>{
+            e.preventDefault();
+            const accessCode=document.getElementById('accessCode').value.toLowerCase().trim();
+            const password=document.getElementById('password').value;
+            const loginBtn=document.getElementById('loginBtn');
+            const errorDiv=document.getElementById('loginError');
+            
+            loginBtn.disabled=true;
+            const spinnerDiv=document.createElement('div');
+            spinnerDiv.className='flex-center';
+            spinnerDiv.innerHTML='<div class="spinner spinner-small"></div>පිවිසෙමින්...';
+            loginBtn.textContent='';
+            loginBtn.appendChild(spinnerDiv);
+            errorDiv.classList.add('hidden');
+            
+            try{
+                const response=await fetch(`${SUPABASE_URL}/rest/v1/credentials?access_code=ilike.${accessCode}&select=*`,{headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}});
+                const data=await response.json();
+                if(data&&data.length>0){
+                    const credential=data[0];
+                    if(!credential.is_active){
+                        showError('මෙම ගිණුම අක්‍රිය කර ඇත. කරුණාකර පරිපාලකයා සම්බන්ධ කර ගන්න.');
+                        return;
+                    }
+                    const inputHash=await hashPassword(password);
+                    if(credential.password_hash===inputHash){
+                        try{
+                            await fetch(`${SUPABASE_URL}/rest/v1/credentials?id=eq.${credential.id}`,{method:'PATCH',headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({last_login:new Date().toISOString()})});
+                        }catch(e){console.log('Last login update skipped');}
+                        currentAccessCode=accessCode;
+                        currentTeacherName=TEACHER_MAPPING[accessCode];
+                        if(!currentTeacherName){
+                            showError('මෙම access code එක සඳහා ගුරු නමක් සකසා නොමැත.');
+                            return;
+                        }
+                        document.getElementById('welcomeText').textContent='ආයුබෝවන්, '+currentTeacherName;
+                        document.getElementById('loginScreen').classList.add('hidden');
+                        document.getElementById('dashboard').classList.remove('hidden');
+                        fetchReportData();
+                    }else{
+                        showError('වැරදි මුරපදයකි');
+                    }
+                }else{
+                    showError('වැරදි ප්‍රවේශ කේතයකි');
+                }
+            }catch(error){
+                console.error('Login error:',error);
+                showError('පිවිසීමේ දෝෂයක් ඇතිවිය. නැවත උත්සාහ කරන්න.');
+            }finally{
+                loginBtn.disabled=false;
+                loginBtn.textContent='පිවිසෙන්න';
+            }
+        });
 
         function showError(message){const errorDiv=document.getElementById('loginError');errorDiv.querySelector('p').textContent=message;errorDiv.classList.remove('hidden');}
-
         function logout(){currentTeacherName='';currentAccessCode='';reportData=[];allStudentsData=[];document.getElementById('dashboard').classList.add('hidden');document.getElementById('loginScreen').classList.remove('hidden');document.getElementById('accessCode').value='';document.getElementById('password').value='';}
 
-        async function fetchReportData(){const loadingSpinner=document.getElementById('loadingSpinner');const reportContent=document.getElementById('reportContent');const noDataMessage=document.getElementById('noDataMessage');loadingSpinner.classList.remove('hidden');reportContent.classList.add('hidden');noDataMessage.classList.add('hidden');try{const response=await fetch(`${SUPABASE_URL}/rest/v1/sipminireport?select=*`,{headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}});if(!response.ok)throw new Error(`HTTP error! status: ${response.status}`);const allData=await response.json();const teacherRecords=[];if(allData&&Array.isArray(allData)){allData.forEach(record=>{if(record.teachername&&record.teachername.includes(currentTeacherName)){teacherRecords.push(record);}});}const selectedMonth=document.getElementById('monthSelect').value;const currentYear=new Date().getFullYear();if(teacherRecords.length===0){showNoData();return;}reportData=teacherRecords.map(student=>{const paymentData=student.payment||'';const monthlyFee=parseFloat(student.monthly_fee)||0;const teacherShare=parseFloat(student.treport)||0;const payments=[];if(paymentData){const entries=paymentData.split(',').map(e=>e.trim());entries.forEach(entry=>{const match=entry.match(/(\d+)\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/(\d{4})-(\d+)/i);if(match){const[,day,month,year,amount]=match;payments.push({day:parseInt(day),month:month,year:parseInt(year),amount:parseFloat(amount)});}});}const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const selectedMonthName=monthNames[parseInt(selectedMonth)-1];const attendanceData=student.sreport||'';const attendances=[];if(attendanceData){const entries=attendanceData.split(',').map(e=>e.trim());entries.forEach(entry=>{const match=entry.match(/(\d+)\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/(\d{4})/i);if(match){const[,day,month,year]=match;attendances.push({day:parseInt(day),month:month,year:parseInt(year)});}});}let totalUnpaidMonths=0;const attendanceByMonth={};attendances.forEach(att=>{const key=`${att.month}-${att.year}`;if(!attendanceByMonth[key]){attendanceByMonth[key]=[];}attendanceByMonth[key].push(att);});Object.keys(attendanceByMonth).forEach(monthKey=>{const[month,year]=monthKey.split('-');const monthAttendances=attendanceByMonth[monthKey];const hasPaymentForMonth=payments.some(p=>p.month===month&&p.year===parseInt(year));if(!hasPaymentForMonth&&monthAttendances.length>0){totalUnpaidMonths++;}});const monthAttendance=attendances.filter(a=>a.month===selectedMonthName&&a.year===currentYear);const monthPayments=payments.filter(p=>p.month===selectedMonthName&&p.year===currentYear);let currentMonthUnpaidDays=0;if(monthAttendance.length>0&&monthPayments.length===0){currentMonthUnpaidDays=monthAttendance.length;}const outstandingAmount=totalUnpaidMonths*monthlyFee;const paidAmount=monthPayments.reduce((sum,p)=>sum+p.amount,0);return{studentname:student.studentname||'නම නොමැත',monthly_fee:monthlyFee,treport:teacherShare,paidAmount,outstandingAmount,unpaidDays:currentMonthUnpaidDays,monthsOutstanding:totalUnpaidMonths,totalAttendance:monthAttendance.length,paymentStatus:outstandingAmount===0?'ගෙවා අවසන්':totalUnpaidMonths>=3?'අනතුරු ඇඟවීම':'හිඟ මුදල්'};});allStudentsData=reportData;reportData=allStudentsData.filter(s=>s.outstandingAmount>0);showAllStudents=false;updateToggleButton();if(allStudentsData.length>0){renderReport();}else{showNoData();}}catch(error){console.error('Error fetching data:',error);showNoData();}loadingSpinner.classList.add('hidden');}
+        async function fetchReportData(){
+            const loadingSpinner=document.getElementById('loadingSpinner');
+            const reportContent=document.getElementById('reportContent');
+            const noDataMessage=document.getElementById('noDataMessage');
+            loadingSpinner.classList.remove('hidden');
+            reportContent.classList.add('hidden');
+            noDataMessage.classList.add('hidden');
+            try{
+                const response=await fetch(`${SUPABASE_URL}/rest/v1/sipminireport?select=*`,{headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}});
+                if(!response.ok)throw new Error('HTTP error! status: '+response.status);
+                const allData=await response.json();
+                const teacherRecords=[];
+                if(allData&&Array.isArray(allData)){
+                    allData.forEach(record=>{if(record.teachername&&record.teachername.includes(currentTeacherName)){teacherRecords.push(record);}});
+                }
+                const selectedMonth=document.getElementById('monthSelect').value;
+                const currentYear=new Date().getFullYear();
+                if(teacherRecords.length===0){showNoData();return;}
+                reportData=teacherRecords.map(student=>{
+                    const paymentData=student.payment||'';
+                    const monthlyFee=parseFloat(student.monthly_fee)||0;
+                    const teacherShare=parseFloat(student.treport)||0;
+                    const payments=[];
+                    if(paymentData){
+                        const entries=paymentData.split(',').map(e=>e.trim());
+                        entries.forEach(entry=>{
+                            const match=entry.match(/(\d+)\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/(\d{4})-(\d+)/i);
+                            if(match){
+                                const[,day,month,year,amount]=match;
+                                payments.push({day:parseInt(day),month:month,year:parseInt(year),amount:parseFloat(amount)});
+                            }
+                        });
+                    }
+                    const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    const selectedMonthName=monthNames[parseInt(selectedMonth)-1];
+                    const attendanceData=student.sreport||'';
+                    const attendances=[];
+                    if(attendanceData){
+                        const entries=attendanceData.split(',').map(e=>e.trim());
+                        entries.forEach(entry=>{
+                            const match=entry.match(/(\d+)\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/(\d{4})/i);
+                            if(match){
+                                const[,day,month,year]=match;
+                                attendances.push({day:parseInt(day),month:month,year:parseInt(year)});
+                            }
+                        });
+                    }
+                    let totalUnpaidMonths=0;
+                    const attendanceByMonth={};
+                    attendances.forEach(att=>{
+                        const key=att.month+'-'+att.year;
+                        if(!attendanceByMonth[key]){attendanceByMonth[key]=[];}
+                        attendanceByMonth[key].push(att);
+                    });
+                    Object.keys(attendanceByMonth).forEach(monthKey=>{
+                        const parts=monthKey.split('-');
+                        const month=parts[0];
+                        const year=parts[1];
+                        const monthAttendances=attendanceByMonth[monthKey];
+                        const hasPaymentForMonth=payments.some(p=>p.month===month&&p.year===parseInt(year));
+                        if(!hasPaymentForMonth&&monthAttendances.length>0){totalUnpaidMonths++;}
+                    });
+                    const monthAttendance=attendances.filter(a=>a.month===selectedMonthName&&a.year===currentYear);
+                    const monthPayments=payments.filter(p=>p.month===selectedMonthName&&p.year===currentYear);
+                    let currentMonthUnpaidDays=0;
+                    if(monthAttendance.length>0&&monthPayments.length===0){currentMonthUnpaidDays=monthAttendance.length;}
+                    const outstandingAmount=totalUnpaidMonths*monthlyFee;
+                    const paidAmount=monthPayments.reduce((sum,p)=>sum+p.amount,0);
+                    return{
+                        studentname:student.studentname||'නම නොමැත',
+                        monthly_fee:monthlyFee,
+                        treport:teacherShare,
+                        paidAmount,
+                        outstandingAmount,
+                        unpaidDays:currentMonthUnpaidDays,
+                        monthsOutstanding:totalUnpaidMonths,
+                        totalAttendance:monthAttendance.length,
+                        paymentStatus:outstandingAmount===0?'ගෙවා අවසන්':totalUnpaidMonths>=3?'අනතුරු ඇඟවීම':'හිඟ මුදල්'
+                    };
+                });
+                allStudentsData=reportData;
+                reportData=allStudentsData.filter(s=>s.outstandingAmount>0);
+                showAllStudents=false;
+                updateToggleButton();
+                if(allStudentsData.length>0){renderReport();}else{showNoData();}
+            }catch(error){console.error('Error:',error);showNoData();}
+            loadingSpinner.classList.add('hidden');
+        }
 
-function toggleStudentView(){showAllStudents=!showAllStudents;if(showAllStudents){reportData=allStudentsData;}else{reportData=allStudentsData.filter(s=>s.outstandingAmount>0);}updateToggleButton();renderReport();}
+        function toggleStudentView(){showAllStudents=!showAllStudents;if(showAllStudents){reportData=allStudentsData;}else{reportData=allStudentsData.filter(s=>s.outstandingAmount>0);}updateToggleButton();renderReport();}
+        function updateToggleButton(){const btn=document.getElementById('toggleViewBtn');if(showAllStudents){btn.innerHTML='⚠️ හිඟ ඇති සිසුන්';btn.classList.remove('btn-blue');btn.classList.add('btn-orange');}else{btn.innerHTML='👥 සියලු සිසුන්';btn.classList.remove('btn-orange');btn.classList.add('btn-blue');}}
+        function showNoData(){const noDataMessage=document.getElementById('noDataMessage');const noDataText=document.getElementById('noDataText');noDataText.textContent='මෙම මාසය සඳහා '+currentTeacherName+' ට අදාළ සිසුන් හමු නොවීය.';noDataMessage.classList.remove('hidden');}
+        
+        function renderReport(){
+            const reportContent=document.getElementById('reportContent');
+            reportContent.classList.remove('hidden');
+            const selectedMonth=document.getElementById('monthSelect').value;
+            const monthName=MONTHS[selectedMonth];
+            const currentYear=new Date().getFullYear();
+            document.getElementById('printHeader').textContent=currentTeacherName+' - '+monthName+' '+currentYear;
+            document.getElementById('tableHeader').textContent='සවිස්තර වාර්තාව - '+monthName+' '+currentYear;
+            document.getElementById('printFooter').textContent='මෙම වාර්තාව '+new Date().toLocaleDateString('si-LK')+' දින ජනනය කරන ලදී';
+            renderSummaryCards();
+            renderCharts();
+            renderTable();
+        }
 
-function updateToggleButton(){const btn=document.getElementById('toggleViewBtn');if(showAllStudents){btn.innerHTML='⚠️ හිඟ ඇති සිසුන්';btn.classList.remove('btn-blue');btn.classList.add('btn-orange');}else{btn.innerHTML='👥 සියලු සිසුන්';btn.classList.remove('btn-orange');btn.classList.add('btn-blue');}}
+        function renderSummaryCards(){
+            const summary=getSummary();
+            const summaryCards=document.getElementById('summaryCards');
+            summaryCards.innerHTML='<div class="card card-blue"><div class="card-content"><div><p class="card-label">මුළු සිසුන්</p><p class="card-value">'+summary.totalStudents+'</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div></div><div class="card card-green"><div class="card-content"><div><p class="card-label">ගෙවූ මුදල</p><p class="card-value">රු '+summary.totalPaid.toLocaleString()+'</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div></div><div class="card card-red"><div class="card-content"><div><p class="card-label">හිඟ මුදල</p><p class="card-value">රු '+summary.totalOutstanding.toLocaleString()+'</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div></div><div class="card card-purple"><div class="card-content"><div><p class="card-label">අපේක්ෂිත මුදල</p><p class="card-value">රු '+summary.totalExpected.toLocaleString()+'</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg></div></div><div class="card card-yellow"><div class="card-content"><div><p class="card-label">ගුරු ආදායම</p><p class="card-value">රු '+summary.totalIncome.toLocaleString()+'</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div></div><div class="card card-orange"><div class="card-content"><div><p class="card-label">හිඟ ඇති සිසුන්</p><p class="card-value">'+summary.studentsWithOutstanding+'</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div></div>';
+        }
 
-function showNoData(){const noDataMessage=document.getElementById('noDataMessage');const noDataText=document.getElementById('noDataText');noDataText.textContent=`මෙම මාසය සඳහා ${currentTeacherName} ට අදාළ සිසුන් හමු නොවීය.`;noDataMessage.classList.remove('hidden');}
+        function getSummary(){const allStudents=allStudentsData.length>0?allStudentsData:reportData;const totalExpected=allStudents.reduce((sum,s)=>sum+s.monthly_fee,0);const totalPaid=allStudents.reduce((sum,s)=>sum+s.paidAmount,0);const totalOutstanding=allStudents.reduce((sum,s)=>sum+s.outstandingAmount,0);const totalIncome=allStudents.reduce((sum,s)=>sum+s.treport,0);const studentsWithOutstanding=allStudents.filter(s=>s.outstandingAmount>0).length;return{totalExpected,totalPaid,totalOutstanding,totalIncome,totalStudents:allStudents.length,studentsWithOutstanding};}
 
-function renderReport(){const reportContent=document.getElementById('reportContent');reportContent.classList.remove('hidden');const selectedMonth=document.getElementById('monthSelect').value;const monthName=MONTHS[selectedMonth];const currentYear=new Date().getFullYear();document.getElementById('printHeader').textContent=`${currentTeacherName} - ${monthName} ${currentYear}`;document.getElementById('tableHeader').textContent=`සවිස්තර වාර්තාව - ${monthName} ${currentYear}`;document.getElementById('printFooter').textContent=`මෙම වාර්තාව ${new Date().toLocaleDateString('si-LK')} දින ජනනය කරන ලදී`;renderSummaryCards();renderCharts();renderTable();}
+        function renderCharts(){const barData=reportData.slice(0,10);const barLabels=barData.map(s=>s.studentname.length>12?s.studentname.substring(0,10)+'...':s.studentname);const paidData=barData.map(s=>s.paidAmount);const outstandingData=barData.map(s=>s.outstandingAmount);if(barChartInstance)barChartInstance.destroy();const barCtx=document.getElementById('barChart').getContext('2d');barChartInstance=new Chart(barCtx,{type:'bar',data:{labels:barLabels,datasets:[{label:'ගෙවූ',data:paidData,backgroundColor:'#10b981'},{label:'හිඟ',data:outstandingData,backgroundColor:'#ef4444'}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}}}});const statusCounts={'ගෙවා අවසන්':0,'හිඟ මුදල්':0,'අනතුරු ඇඟවීම':0};reportData.forEach(s=>{statusCounts[s.paymentStatus]++;});const pieLabels=Object.keys(statusCounts).filter(k=>statusCounts[k]>0);const pieData=pieLabels.map(k=>statusCounts[k]);const pieColors=['#10b981','#f59e0b','#ef4444'];if(pieChartInstance)pieChartInstance.destroy();const pieCtx=document.getElementById('pieChart').getContext('2d');pieChartInstance=new Chart(pieCtx,{type:'pie',data:{labels:pieLabels,datasets:[{data:pieData,backgroundColor:pieColors}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});}
 
-function renderSummaryCards(){const summary=getSummary();const summaryCards=document.getElementById('summaryCards');summaryCards.innerHTML=`<div class="card card-blue"><div class="card-content"><div><p class="card-label">මුළු සිසුන්</p><p class="card-value">${summary.totalStudents}</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div></div><div class="card card-green"><div class="card-content"><div><p class="card-label">ගෙවූ මුදල</p><p class="card-value">රු ${summary.totalPaid.toLocaleString()}</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div></div><div class="card card-red"><div class="card-content"><div><p class="card-label">හිඟ මුදල</p><p class="card-value">රු ${summary.totalOutstanding.toLocaleString()}</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div></div><div class="card card-purple"><div class="card-content"><div><p class="card-label">අපේක්ෂිත මුදල</p><p class="card-value">රු ${summary.totalExpected.toLocaleString()}</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg></div></div><div class="card card-yellow"><div class="card-content"><div><p class="card-label">ගුරු ආදායම</p><p class="card-value">රු ${summary.totalIncome.toLocaleString()}</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div></div><div class="card card-orange"><div class="card-content"><div><p class="card-label">හිඟ ඇති සිසුන්</p><p class="card-value">${summary.studentsWithOutstanding}</p></div><svg class="card-icon" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div></div>`;}
+        function renderTable(){const tableBody=document.getElementById('tableBody');tableBody.innerHTML=reportData.map((student,index)=>{const statusClass=student.paymentStatus==='ගෙවා අවසන්'?'status-success':student.paymentStatus==='අනතුරු ඇඟවීම'?'status-danger':'status-warning';return'<tr><td>'+(index+1)+'</td><td class="font-bold">'+student.studentname+'</td><td class="text-right">රු '+student.monthly_fee.toLocaleString()+'</td><td class="text-right text-green">රු '+student.paidAmount.toLocaleString()+'</td><td class="text-right text-red">'+(student.outstandingAmount>0?'රු '+student.outstandingAmount.toLocaleString():'-')+'</td><td class="text-center">'+(student.monthsOutstanding>0?student.monthsOutstanding:'-')+'</td><td class="text-center text-orange">'+(student.unpaidDays>0?student.unpaidDays:'-')+'</td><td class="text-center text-blue">'+student.totalAttendance+'</td><td class="text-center"><span class="status-badge '+statusClass+'">'+student.paymentStatus+'</span></td></tr>';}).join('');}
 
-function getSummary(){const allStudents=allStudentsData.length>0?allStudentsData:reportData;const totalExpected=allStudents.reduce((sum,s)=>sum+s.monthly_fee,0);const totalPaid=allStudents.reduce((sum,s)=>sum+s.paidAmount,0);const totalOutstanding=allStudents.reduce((sum,s)=>sum+s.outstandingAmount,0);const totalIncome=allStudents.reduce((sum,s)=>sum+s.treport,0);const studentsWithOutstanding=allStudents.filter(s=>s.outstandingAmount>0).length;return{totalExpected,totalPaid,totalOutstanding,totalIncome,totalStudents:allStudents.length,studentsWithOutstanding};}
+        function downloadPDF(){window.print();}
 
-function renderCharts(){const barData=reportData.slice(0,10);const barLabels=barData.map(s=>s.studentname.length>12?s.studentname.substring(0,10)+'...':s.studentname);const paidData=barData.map(s=>s.paidAmount);const outstandingData=barData.map(s=>s.outstandingAmount);if(barChartInstance)barChartInstance.destroy();const barCtx=document.getElementById('barChart').getContext('2d');barChartInstance=new Chart(barCtx,{type:'bar',data:{labels:barLabels,datasets:[{label:'ගෙවූ',data:paidData,backgroundColor:'#10b981'},{label:'හිඟ',data:outstandingData,backgroundColor:'#ef4444'}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}}}});const statusCounts={'ගෙවා අවසන්':0,'හිඟ මුදල්':0,'අනතුරු ඇඟවීම':0};reportData.forEach(s=>{statusCounts[s.paymentStatus]++;});const pieLabels=Object.keys(statusCounts).filter(k=>statusCounts[k]>0);const pieData=pieLabels.map(k=>statusCounts[k]);const pieColors=['#10b981','#f59e0b','#ef4444'];if(pieChartInstance)pieChartInstance.destroy();const pieCtx=document.getElementById('pieChart').getContext('2d');pieChartInstance=new Chart(pieCtx,{type:'pie',data:{labels:pieLabels,datasets:[{data:pieData,backgroundColor:pieColors}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});}
+        function copyReport(){if(!reportData||reportData.length===0){alert('වාර්තා කිරීමට දත්ත නොමැත');return;}const summary=getSummary();const selectedMonth=document.getElementById('monthSelect').value;const monthName=MONTHS[selectedMonth];const currentYear=new Date().getFullYear();let text='🎓 *'+currentTeacherName+' - මාසික වාර්තාව*\n';text+='📅 *මාසය:* '+monthName+' '+currentYear+'\n\n';text+='📊 *සාරාංශය:*\n';text+='👥 සිසුන් සංඛ්‍යාව: '+summary.totalStudents+'\n';text+='💰 අපේක්ෂිත මුදල: රු '+summary.totalExpected.toLocaleString()+'\n';text+='✅ ගෙවූ මුදල: රු '+summary.totalPaid.toLocaleString()+'\n';text+='⚠️ හිඟ මුදල: රු '+summary.totalOutstanding.toLocaleString()+'\n';text+='💵 ගුරු ආදායම: රු '+summary.totalIncome.toLocaleString()+'\n';text+='⚡ හිඟ ඇති සිසුන්: '+summary.studentsWithOutstanding+'\n\n';if(summary.studentsWithOutstanding>0){text+='🚨 *හිඟ මුදල් ඇති සිසුන්:*\n\n';reportData.filter(s=>s.outstandingAmount>0).forEach((s,i)=>{text+=(i+1)+'. *'+s.studentname+'*\n';text+='   මාසික ගාස්තුව: රු '+s.monthly_fee.toLocaleString()+'\n';text+='   හිඟ මුදල: රු '+s.outstandingAmount.toLocaleString()+' (මාස '+s.monthsOutstanding+')\n';text+='   හිඟ දින: '+s.unpaidDays+'\n';text+='   තත්වය: '+s.paymentStatus+'\n\n';});}navigator.clipboard.writeText(text).then(()=>{alert('✅ වාර්තාව පිටපත් කරන ලදී!');});}
 
-function renderTable(){const tableBody=document.getElementById('tableBody');tableBody.innerHTML=reportData.map((student,index)=>{const statusClass=student.paymentStatus==='ගෙවා අවසන්'?'status-success':student.paymentStatus==='අනතුරු ඇඟවීම'?'status-danger':'status-warning';return`<tr><td>${index+1}</td><td class="font-bold">${student.studentname}</td><td class="text-right">රු ${student.monthly_fee.toLocaleString()}</td><td class="text-right text-green">රු ${student.paidAmount.toLocaleString()}</td><td class="text-right text-red">${student.outstandingAmount>0?`රු ${student.outstandingAmount.toLocaleString()}`:'-'}</td><td class="text-center">${student.monthsOutstanding>0?student.monthsOutstanding:'-'}</td><td class="text-center text-orange">${student.unpaidDays>0?student.unpaidDays:'-'}</td><td class="text-center text-blue">${student.totalAttendance}</td><td class="text-center"><span class="status-badge ${statusClass}">${student.paymentStatus}</span></td></tr>`;}).join('');}
-
-function downloadPDF(){window.print();}
-
-function copyReport(){if(!reportData||reportData.length===0){alert('වාර්තා කිරීමට දත්ත නොමැත');return;}const summary=getSummary();const selectedMonth=document.getElementById('monthSelect').value;const monthName=MONTHS[selectedMonth];const currentYear=new Date().getFullYear();let text=`🎓 *${currentTeacherName} - මාසික වාර්තාව*\n`;text+=`📅 *මාසය:* ${monthName} ${currentYear}\n\n`;text+=`📊 *සාරාංශය:*\n`;text+=`👥 සිසුන් සංඛ්‍යාව: ${summary.totalStudents}\n`;text+=`💰 අපේක්ෂිත මුදල: රු ${summary.totalExpected.toLocaleString()}\n`;text+=`✅ ගෙවූ මුදල: රු ${summary.totalPaid.toLocaleString()}\n`;text+=`⚠️ හිඟ මුදල: රු ${summary.totalOutstanding.toLocaleString()}\n`;text+=`💵 ගුරු ආදායම: රු ${summary.totalIncome.toLocaleString()}\n`;text+=`⚡ හිඟ ඇති සිසුන්: ${summary.studentsWithOutstanding}\n\n`;if(summary.studentsWithOutstanding>0){text+=`🚨 *හිඟ මුදල් ඇති සිසුන්:*\n\n`;reportData.filter(s=>s.outstandingAmount>0).forEach((s,i)=>{text+=`${i+1}. *${s.studentname}*\n`;text+=`   මාසික ගාස්තුව: රු ${s.monthly_fee.toLocaleString()}\n`;text+=`   හිඟ මුදල: රු ${s.outstandingAmount.toLocaleString()} (මාස ${s.monthsOutstanding})\n`;text+=`   හිඟ දින: ${s.unpaidDays}\n`;text+=`   තත්වය: ${s.paymentStatus}\n\n`;});}navigator.clipboard.writeText(text).then(()=>{alert('✅ වාර්තාව පිටපත් කරන ලදී!');});}
-
-function shareWhatsApp(){copyReport();setTimeout(()=>{window.open('https://wa.me/','_blank');},500);}
+        function shareWhatsApp(){copyReport();setTimeout(()=>{window.open('https://wa.me/','_blank');},500);}
     </script>
 </body>
 </html>
